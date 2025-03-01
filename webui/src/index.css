@@ -1,0 +1,49 @@
+@import 'tailwindcss';
+
+:root {
+  font-family: 'Lexend Deca';
+  color: white;
+}
+::selection {
+  @apply  bg-gray-500 text-white;
+}
+
+.navbar-button {
+  @apply  p-2 rounded-full text-xl 
+          hover:bg-white hover:text-gray-800 
+          active:bg-gray-300 active:text-gray-800 active:duration-[0s]
+          transition-all duration-150;
+}
+
+input[type='text'] {
+  @apply  px-4 py-2 rounded-full bg-gray-800 border-gray-700 border-2 
+          focus:border-gray-300 outline-0 
+          disabled:border-gray-700 disabled:bg-gray-900 disabled:text-gray-500          
+          transition-all duration-150;
+}
+input[type='text'].invalid {
+  @apply  border-red-400;
+}
+
+
+input[type="checkbox"] {  
+  -webkit-appearance: none;
+  appearance: none;  
+  background-color: #fff;  
+  margin: 0;
+  
+  @apply  bg-gray-800 rounded-full w-5 h-5 border-gray-700 border-2
+          transition-all duration-300;
+}
+
+input[type="checkbox"]:checked {    
+  @apply  border-white inset-ring-4 inset-ring-gray-800 bg-white;
+}
+
+button.pill {
+  @apply  bg-gray-100 text-gray-800 rounded-full border-0 px-4 py-2
+          disabled:bg-gray-500
+          hover:bg-white
+          active:bg-gray-400 active:duration-[0s]
+          transition-all duration-150;
+}
