@@ -21,7 +21,7 @@ input[type='text'] {
           disabled:border-gray-700 disabled:bg-gray-900 disabled:text-gray-500          
           transition-all duration-150;
 }
-input[type='text'].invalid {
+input[type='text']:not(:disabled):not(:focus).invalid {
   @apply  border-red-400;
 }
 
@@ -46,4 +46,29 @@ button.pill {
           hover:bg-white
           active:bg-gray-400 active:duration-[0s]
           transition-all duration-150;
+}
+
+.copy-icon {  
+  font-family: "tabler-icons" !important;  
+}
+.copy-icon::before {
+  content: '\ea7a';  
+  display: inline-block;
+}
+.copy-icon.copy-icon-animate::before {
+  animation: copy-icon-click-animation 0.2s forwards ease-in-out;  
+  display: inline-block;
+}
+@keyframes copy-icon-click-animation {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0);
+    content: '\ea5e';        
+  }
+  100% {
+    transform: scale(1);
+    content: '\ea5e';
+  }
 }

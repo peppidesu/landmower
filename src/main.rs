@@ -6,6 +6,7 @@ use axum::{
     body::Body, extract::{Path, State}, http::StatusCode, response::Redirect, routing, Router
 };
 use axum_embed::ServeEmbed;
+use minijinja::Environment;
 use rust_embed::Embed;
 use tokio::sync::RwLock;
 use concurrent_queue::ConcurrentQueue;
@@ -52,12 +53,14 @@ async fn metadata_update_worker(state: AppState) {
                 let link = links.get_mut(&el.key).unwrap();
                 link.metadata.used += 1;
                 link.metadata.last_used = link.metadata.last_used.max(el.timestamp);
-            }        
+            }
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 }
+
 async fn inject_environment(
+    State(state): State<AppState>,
     req: axum::extract::Request,
     next: axum::middleware::Next
 ) -> axum::response::Response {
@@ -67,7 +70,12 @@ async fn inject_environment(
         body.collect().await.unwrap().to_bytes().to_vec()
     ).unwrap();    
     
-    let replaced = content.replace("{% server_url %}", "http://localhost:3000/");    
+    let env = Environment::new();
+    let replaced = env.render_str(&content, state.config.jinja_context())
+    .unwrap_or_else(|e| {
+        tracing::error!("Failed to render template: {:?}", e);
+        content
+    });    
     
     axum::http::Response::from_parts(parts, Body::from(replaced))
 }
@@ -90,12 +98,12 @@ async fn main() {
     let app = Router::new()
         .nest("/api", api::router())
         .nest_service("/static", ServeEmbed::<PageAssets>::new())                
-        .layer(axum::middleware::from_fn(inject_environment))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), inject_environment))
         .route("/:key", routing::get(redirect))
         .with_state(state.clone())
         .layer(TraceLayer::new_for_http());
     
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&config.bind_address).await.unwrap();
 
     let worker_handle = tokio::task::spawn(metadata_update_worker(state.clone()));
 

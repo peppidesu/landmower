@@ -9,6 +9,7 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
     plugins: [preact(), tailwindcss()],
     build: {
       outDir: '../static',
+      emptyOutDir: true
     },
   }
 })

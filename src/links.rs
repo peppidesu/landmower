@@ -3,13 +3,13 @@ use std::{collections::{hash_map, HashMap}, hash::{Hash as _, Hasher as _}, path
 use serde::{Deserialize, Serialize};
 use base64::prelude::*;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Entry {
     pub link: String,
     pub metadata: EntryMetadata
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EntryMetadata {
     pub used: u64,
     pub last_used: std::time::SystemTime,
@@ -98,15 +98,14 @@ impl Links {
     ///
     /// This function will return an error if the key is already in use, a.k.a. the link
     /// already has an associated mapping 
-    pub fn add(&mut self, link: String) -> Result<(String, Entry), String> {
-        let key = self.generate_key(&link)        
-            .ok_or("Link already has an associated alias.".to_string())?;
-        
-        self.add_named(key.clone(), link)
-            .map(|entry| (key, entry))
+    pub fn add(&mut self, link: String) -> (String, Entry) {
+        match self.generate_key(&link) {
+            Ok(key) => (key.clone(), self.add_named(key, link).unwrap()),
+            Err(pair) => pair
+        }
     }
     
-    fn generate_key(&self, link: &str) -> Option<String> {
+    fn generate_key(&self, link: &str) -> Result<String, (String, Entry)> {
         // hash + base64 encode
         let mut hasher = std::hash::DefaultHasher::new();
         link.hash(&mut hasher);
@@ -117,14 +116,14 @@ impl Links {
             let key = &hash[..i];
             if let Some(other) = self.forward_map.get(key) { 
                 if other.link == link {
-                    return None;
-                }                
+                    return Err((key.to_string(), other.clone()));
+                }
                 continue;
             }
-            return Some(key.into());
+            return Ok(key.into());
         }
-
-        None // hash collision -> link already present in storage
+        let other = self.get(&hash).unwrap().clone();
+        Err((hash, other)) // hash collision -> link already present in storage
     }
 
     /// Insert a new mapping with the given key and link.
@@ -224,8 +223,11 @@ mod tests {
         let link = "https://example.com";
         let key = links.generate_key(link).unwrap();
         assert_eq!(key.len(), 4);
-        links.add_named(key.clone(), link.to_string()).unwrap();
-        assert_eq!(links.generate_key(link), None);
+        let entry = links.add_named(key.clone(), link.to_string()).unwrap();
+        let result = links.generate_key(link);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), (key, entry));
     }
 
     #[test]
@@ -275,7 +277,7 @@ mod tests {
         let mut links = Links { forward_map: HashMap::new(), reverse_map: HashMap::new() };
         let link = "https://example.com";
         
-        let (key, entry) = links.add(link.to_string()).unwrap();
+        let (key, entry) = links.add(link.to_string());
         
         assert_eq!(links.forward_map.len(), 1);
         assert_eq!(links.reverse_map.len(), 1);

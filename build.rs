@@ -1,5 +1,5 @@
 fn main() {
-    println!("cargo:rerun-if-changed=webui");
+    println!("cargo:rerun-if-changed=/webui");
 
     std::process::Command::new("bun")
         .arg("install")
