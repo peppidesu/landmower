@@ -1,9 +1,9 @@
 use std::{
-    sync::Arc, time::Duration
+    borrow::Cow, sync::Arc, time::Duration
 };
 
 use axum::{
-    body::Body, extract::{Path, State}, http::StatusCode, response::Redirect, routing, Router
+    body::Body, extract::{Path, State}, http::{StatusCode, Uri}, response::{Html, Redirect}, routing, Router
 };
 use axum_embed::ServeEmbed;
 use minijinja::Environment;
@@ -52,7 +52,9 @@ async fn metadata_update_worker(state: AppState) {
             while let Ok(el) = state.access_event_queue.pop() {
                 let link = links.get_mut(&el.key).unwrap();
                 link.metadata.used += 1;
-                link.metadata.last_used = link.metadata.last_used.max(el.timestamp);
+                link.metadata.last_used = link.metadata.last_used.max(
+                    chrono::DateTime::from(el.timestamp)
+                );
             }
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -92,14 +94,18 @@ async fn main() {
         links: RwLock::new(Links::load(&config.link_data_path).unwrap()).into(), 
         access_event_queue: ConcurrentQueue::unbounded().into()
     };
-
-    
+        
+    let serve_embed = ServeEmbed::<PageAssets>::with_parameters(
+        Some("index.html".to_string()),
+        axum_embed::FallbackBehavior::Ok,
+        Some("index.html".to_string()),
+    );
 
     let app = Router::new()
         .nest("/api", api::router())
-        .nest_service("/static", ServeEmbed::<PageAssets>::new())                
+        .route("/go/:key", routing::get(redirect))                
+        .nest_service("/", serve_embed)
         .layer(axum::middleware::from_fn_with_state(state.clone(), inject_environment))
-        .route("/:key", routing::get(redirect))
         .with_state(state.clone())
         .layer(TraceLayer::new_for_http());
     

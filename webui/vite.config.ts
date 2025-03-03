@@ -4,9 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import svgr from 'vite-plugin-svgr'
 
 // https://vite.dev/config/
-export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
-  return {
-    base: (mode === 'production') ? '/static/' : '/',    
+export default defineConfig(() => {
+  return {    
     plugins: [
       preact(), 
       tailwindcss(), 

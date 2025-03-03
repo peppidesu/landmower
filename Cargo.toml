@@ -7,6 +7,7 @@ edition = "2021"
 axum = { version = "0.7.9", default-features = false, features = ["json", "tokio", "http1"] }
 axum-embed = "0.1.0"
 base64 = "0.22.1"
+chrono = { version = "0.4.40", features = ["serde"] }
 concurrent-queue = "2.5.0"
 dirs = "5.0.1"
 http-body-util = "0.1.2"

@@ -1,37 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import axios from "axios";
-import CopyButton from "./CopyButton";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { useDebouncedCallback } from "use-debounce";
+import { add_link, AddLinkResponse, validate_add_link, ValidateAddLinkResponse } from "../api";
+
+import CopyButton from "./CopyButton";
 import Spinner from "../assets/spinner.svg?react";
 
-type Jsend<T, F> = { status: "success", data: T }
-                 | { status: "fail", data: F }
-                 | { status: "error", data: string };
-
-type Entry = { 
-    link: string, 
-    key: string, 
-    metadata: { 
-        used: number, 
-        last_used: string, created: string 
-    } 
-}
-
-type AddLinkResponse = Jsend<AddLinkSuccessData, AddLinkFailData>;
-type ValidateResponse = Jsend<null, AddLinkFailData>;
-type AddLinkSuccessData = { key: string, entry: Entry };
-type AddLinkFailData = { link?: string, key?: string };
-
-async function addLink(link: string, custom: boolean, customName: string): Promise<AddLinkResponse> {    
-    let res = await axios.post(`${import.meta.env.VITE_SERVER_URL}api/links`, {
-        link: link,
-        key: custom ? customName : undefined
-    });
-    return res.data;
-}
-
-
-export function AddLinkForm() {        
+export default function AddLinkForm() {        
     const form = useRef<HTMLFormElement>(null);
 
     const [link, setLink] = useState("");    
@@ -42,15 +16,12 @@ export function AddLinkForm() {
     const [keyTouched, setKeyTouched] = useState(false);
 
     const [addLinkRes, setShortenRes] = useState<AddLinkResponse | null>(null);    
-    const [validateRes, setValidateRes] = useState<ValidateResponse | null>(null);
+    const [validateRes, setValidateRes] = useState<ValidateAddLinkResponse | null>(null);
 
     const [isValidating, setIsValidating] = useState(false);
     const validate = useDebouncedCallback(async (link, customize, key) => {
-        let res = await axios.post(`${import.meta.env.VITE_SERVER_URL}api/validate/add_link`, {
-            link: link,
-            key: customize ? key : undefined
-        });
-        setValidateRes(res.data);
+        let res = await validate_add_link(link, customize, key);
+        setValidateRes(res);
         setIsValidating(false);
     }, 500);
     
@@ -62,12 +33,12 @@ export function AddLinkForm() {
     const invalid = validateRes?.status === "fail" ? validateRes.data : null;
 
     return (    
-        <div class="max-w-2xl flex flex-col items-center px-8 gap-5 w-full">
+        <div class="max-w-2xl flex flex-col items-center px-4 gap-5 w-full">
             <h1 class="text-7xl">landmower</h1>
             <form ref={form} method="post" 
                 onSubmit={async e => {
                     e.preventDefault();                             
-                    let result = await addLink(link, customize, key);
+                    let result = await add_link(link, customize, key);
                     if (result.status === "success") {
                         form.current?.reset();
                     }
@@ -81,8 +52,8 @@ export function AddLinkForm() {
                     onBlur={_ => setLinkTouched(true)}
                     placeholder="Your very, very long URL" 
                 />
-                <div class="flex items-center gap-2 pt-2 w-full">                               
-                    <label for="customize" class="grid grid-cols-[1em_auto] px-2 gap-4 items-center text-gray-300">
+                <div class="flex items-center gap-2 pt-2 w-full flex-wrap">                               
+                    <label for="customize" class="grid grid-cols-[1em_auto] mx-2 gap-4 items-center text-gray-300">
                         <input type="checkbox"id="customize" name="customize" 
                             onClick={() => setCustomize(!customize)}
                             class="row-start-1 row-end-1 col-start-1 col-end-1 w-0 h-0"
@@ -90,7 +61,7 @@ export function AddLinkForm() {
                         Customize
                     </label>
                     
-                    <input class={`w-full ${keyTouched && invalid?.key ? "invalid" : ""}`}
+                    <input class={`w-2xs grow shrink-0 ${keyTouched && invalid?.key ? "invalid" : ""}`}
                         name="key" 
                         type="text" 
                         placeholder="Enter custom key"                     
@@ -99,14 +70,14 @@ export function AddLinkForm() {
                         disabled={!customize}
                     />
                     <button 
-                        class="pill h-10 w-40 "
+                        class="pill btn-primary h-10 min-w-30"
                         type="submit"
                         disabled={isValidating || !!invalid}
                     >
-                        {isValidating ? <Spinner class="m-auto" /> : "Shorten"}
-                    </button>  
+                        {isValidating ? <Spinner class="m-auto"/> : "Shorten"}
+                    </button>
                 </div>
-                <ul class="text-red-400 text-sm h-[2rlh] w-full text-right pt-2 pr-1">
+                <ul class="text-red-400 text-sm h-[2rlh] w-full text-right mt-2 mr-1">
                     {linkTouched && invalid?.link && <li>{invalid?.link}</li>}
                     {keyTouched  && invalid?.key && <li>{invalid?.key}</li>}
                 </ul>

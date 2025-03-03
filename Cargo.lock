@@ -212,6 +212,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -745,6 +746,7 @@ dependencies = [
  "axum",
  "axum-embed",
  "base64",
+ "chrono",
  "concurrent-queue",
  "dirs",
  "http-body-util",

@@ -12,6 +12,7 @@
     "@tailwindcss/vite": "^4.0.9",
     "axios": "^1.8.1",
     "preact": "^10.26.2",
+    "preact-iso": "^2.9.1",
     "tailwindcss": "^4.0.9",
     "use-debounce": "^10.0.4"
   },

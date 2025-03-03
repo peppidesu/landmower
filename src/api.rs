@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use axum::{extract::State, http::{StatusCode, Uri}, routing, Json, Router};
 use serde::{Deserialize, Serialize};
 
@@ -92,8 +90,6 @@ trait Validator {
     async fn validate(&self, state: &AppState) -> Option<Self::Fail>;
 }
 
-
-
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
@@ -110,6 +106,22 @@ pub fn router() -> Router<AppState> {
             "/validate/add_link",
             routing::post(validate_add_link)
         )
+}
+
+#[derive(Serialize, Deserialize)]
+struct ResponseEntry {
+    key: String,
+    link: String,
+    metadata: crate::links::EntryMetadata,
+}
+impl From<(String, Entry)> for ResponseEntry {
+    fn from((key, entry): (String, Entry)) -> Self {
+        Self {
+            key,
+            link: entry.link,
+            metadata: entry.metadata
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -199,15 +211,16 @@ async fn add_link(
     Jsend::Success(AddLinkSuccessResponse { key, entry })
 }
 
-type GetLinkResponse = Entry;
+type GetLinkResponse = ResponseEntry;
 async fn get_link(
     State(state): State<AppState>,
     key: axum::extract::Path<String>
 ) -> Jsend<GetLinkResponse, String> {
     let links = state.links.read().await;
-    links.get(&key).cloned()
+    links.get(&key)
+        .map(|entry| (key.clone(), entry.clone()).into())
         .ok_or("Link not found".to_string())
-        .into()    
+        .into()
 }
 
 async fn delete_link(
@@ -221,13 +234,15 @@ async fn delete_link(
         .into()
 }
 
-type GetLinksResponse = Vec<(String, Entry)>;
+
+
+type GetLinksResponse = Vec<ResponseEntry>;
 async fn get_links(
     State(state): State<AppState>
 ) -> Jsend<GetLinksResponse, ()> {
     let links = state.links.read().await;
     let res = links.iter()
-        .map(|(k,v)| (k.clone(), v.clone()))
+        .map(|(k, v)| (k.clone(), v.clone()).into())
         .collect::<Vec<_>>();
     Jsend::Success(res)
 }
@@ -540,7 +555,7 @@ mod tests {
     
             let client = reqwest::Client::new();
     
-            let res = client.post(format!("{addr}/links"))
+            client.post(format!("{addr}/links"))
                 .json(&AddLinkRequest { 
                     key: Some("test".to_string()), 
                     link: "https://example.com".to_string() 
@@ -556,8 +571,8 @@ mod tests {
 
             let data = body.success().unwrap();
             assert_eq!(data.len(), 1);
-            assert_eq!(data[0].0, "test");
-            assert_eq!(data[0].1.link, "https://example.com");
+            assert_eq!(data[0].key, "test");
+            assert_eq!(data[0].link, "https://example.com");
     
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);

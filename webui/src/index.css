@@ -15,6 +15,13 @@
           transition-all duration-150;
 }
 
+.delete-button {
+  @apply  rounded-full text-xl text-red-400
+          hover:bg-red-400 hover:text-gray-900
+          active:bg-red-400 active:text-gray-900 active:duration-[0s]
+          transition-all duration-150;
+}
+
 input[type='text'] {
   @apply  px-4 py-2 rounded-full bg-gray-800 border-gray-700 border-2 
           focus:border-gray-300 outline-0 
@@ -41,10 +48,22 @@ input[type="checkbox"]:checked {
 }
 
 button.pill {
-  @apply  bg-gray-100 text-gray-800 rounded-full border-0 px-4 py-2
+  @apply  rounded-full border-0 px-4 py-2
           disabled:bg-gray-500
+          active:duration-[0s]
+          transition-all duration-150;
+}
+
+.btn-primary {
+  @apply  bg-gray-200 text-gray-800
           hover:bg-white
-          active:bg-gray-400 active:duration-[0s]
+          active:bg-blue-400/20 active:duration-[0s]
+          transition-all duration-150;
+}
+.btn-danger {
+  @apply  bg-red-400/80 text-gray-800
+          hover:bg-red-400
+          active:bg-red-400/20 active:duration-[0s]
           transition-all duration-150;
 }
 
@@ -59,6 +78,24 @@ button.pill {
   animation: copy-icon-click-animation 0.2s forwards ease-in-out;  
   display: inline-block;
 }
+
+.dialog-wrapper {
+  @apply fixed inset-0 bg-black/50 flex justify-center items-center
+          transition-all duration-150;
+  pointer-events: all;
+}
+.dialog-wrapper > * {
+  @apply transition-all duration-150;
+}
+
+.dialog-wrapper.hidden {
+  opacity: 0;  
+  pointer-events: none;
+}
+.dialog-wrapper.hidden > * {
+  transform: scale(0.9);
+}
+
 @keyframes copy-icon-click-animation {
   0% {
     transform: scale(1);

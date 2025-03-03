@@ -1,5 +1,6 @@
 use std::{collections::{hash_map, HashMap}, hash::{Hash as _, Hasher as _}, path::Path};
 
+use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use base64::prelude::*;
 
@@ -12,18 +13,20 @@ pub struct Entry {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EntryMetadata {
     pub used: u64,
-    pub last_used: std::time::SystemTime,
-    pub created: std::time::SystemTime
+    pub last_used: DateTime<Utc>,    
+    pub created: DateTime<Utc>,
 }
 
 impl From<String> for Entry {
-    fn from(link: String) -> Self {
+    fn from(link: String) -> Self {        
+        let now = DateTime::<Utc>::from(std::time::SystemTime::now());
+
         Self {
             link,
             metadata: EntryMetadata {
                 used: 0,
-                last_used: std::time::SystemTime::now(),
-                created: std::time::SystemTime::now()
+                last_used: now,
+                created: now
             }
         }
     }
