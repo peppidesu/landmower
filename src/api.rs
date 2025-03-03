@@ -3,10 +3,96 @@ use std::fmt::Display;
 use axum::{extract::State, http::{StatusCode, Uri}, routing, Json, Router};
 use serde::{Deserialize, Serialize};
 
-use crate::{links::Entry, AppState, Config};
-
+use crate::{links::Entry, AppState};
 
 pub type HttpError = (StatusCode, String);
+
+pub mod jsend {
+    use std::ops::FromResidual;
+
+    use axum::{response::IntoResponse, Json, http::status::StatusCode};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(tag = "status", content = "data", rename_all = "lowercase")]
+    pub enum Jsend<T, F> {
+        Success(T),
+        Fail(F),
+        Error(String),
+    }
+    impl<T,F> Jsend<T, F> {
+        pub fn is_success(&self) -> bool {
+            matches!(self, Jsend::Success(_))
+        }
+        pub fn is_fail(&self) -> bool {
+            matches!(self, Jsend::Fail(_))
+        }
+        pub fn is_error(&self) -> bool {
+            matches!(self, Jsend::Error(_))
+        }
+
+        pub fn success(self) -> Option<T> {
+            match self {
+                Jsend::Success(data) => Some(data),
+                _ => None
+            }
+        }
+        pub fn fail(self) -> Option<F> {
+            match self {
+                Jsend::Fail(fail) => Some(fail),
+                _ => None
+            }
+        }
+        pub fn error(self) -> Option<String> {
+            match self {
+                Jsend::Error(message) => Some(message),
+                _ => None
+            }
+        }
+    }
+
+    impl<T: Serialize, F: Serialize> IntoResponse for Jsend<T, F> {
+        fn into_response(self) -> axum::response::Response {
+            match &self {
+                Jsend::Success(_)   => (StatusCode::OK, Json(self)).into_response(),
+                Jsend::Fail(_)      => (StatusCode::OK, Json(self)).into_response(),
+                Jsend::Error(_)     => (StatusCode::INTERNAL_SERVER_ERROR, Json(self)).into_response(),                
+            }
+        }
+    }
+
+    impl <T, F> From<Result<T, F>> for Jsend<T, F> {
+        fn from(result: Result<T, F>) -> Self {
+            match result {
+                Ok(data) => Jsend::Success(data),
+                Err(fail) => Jsend::Fail(fail)
+            }
+        }
+    }
+
+    impl<T, F> FromResidual<Result<std::convert::Infallible, String>> for Jsend<T, F> {
+        fn from_residual(residual: Result<std::convert::Infallible, String>) -> Self {
+            match residual {                
+                Err(message) => Jsend::Error(message)
+            }
+        }
+    }
+
+    impl<T, F> From<T> for Jsend<T, F> {
+        fn from(data: T) -> Self {
+            Jsend::Success(data)
+        }
+    }
+    
+}
+use jsend::*;
+
+trait Validator {
+    type Fail;
+    async fn validate(&self, state: &AppState) -> Option<Self::Fail>;
+}
+
+
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -21,8 +107,8 @@ pub fn router() -> Router<AppState> {
                     .delete(delete_link)
         )
         .route(
-            "/validate/add_form",
-            routing::post(validate_add_form)
+            "/validate/add_link",
+            routing::post(validate_add_link)
         )
 }
 
@@ -33,145 +119,127 @@ struct AddLinkRequest {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct AddLinkResponse {
+pub struct AddLinkSuccessResponse {
     key: String,
     entry: Entry,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AddLinkFailResponse {
+    key: Option<String>,
+    link: Option<String>,
+}
+
+impl Validator for AddLinkRequest {
+    type Fail = AddLinkFailResponse;
+    async fn validate(&self, state: &AppState) -> Option<Self::Fail> {
+        let mut fail = AddLinkFailResponse {
+            key: None,
+            link: None
+        };
+    
+        if self.link.is_empty() {
+            fail.link = Some("Link cannot be empty".to_string());
+        }
+        else {
+            match self.link.parse::<Uri>() {
+                Ok(uri) => {
+                    if uri.host().is_none() {
+                        fail.link = Some("Invalid URL".to_string());
+                    }                          
+                },
+                Err(_) => {
+                    fail.link = Some("Invalid URL".to_string());           
+                }
+            }
+        }
+    
+        if let Some(key) = &self.key {
+            if key.len() < 4 {
+                fail.key = Some("Key cannot be less than 4 characters".to_string());
+            }
+            else if key.contains(|c: char| !c.is_alphanumeric() && c != '_' && c != '-') {
+                fail.key = Some("Key can only contain 0-9, A-Z, a-z, _ or -".to_string());
+            }
+            else if state.config.key_blacklist.iter().any(|k| k == key) {
+                fail.key = Some(format!("Key '{key}' is disallowed"));
+            }
+            else if state.links.read().await.get(key).is_some() {
+                fail.key = Some("Key already in use".to_string());
+            }
+        }
+    
+        if fail.key.is_some() || fail.link.is_some() {
+            Some(fail)
+        } else {
+            None
+        }
+    }
 }
 
 async fn add_link(
     State(state): State<AppState>,
     Json(req): Json<AddLinkRequest>,
-) -> Result<Json<AddLinkResponse>, HttpError> {
-    if let Err(e) = validate_link(&state, &req.link) {
-        return Err((StatusCode::BAD_REQUEST, e))
-    }
-    if let Some(key) = &req.key {
-        if let Err(e) = validate_key(&state, key).await {
-            return Err((StatusCode::BAD_REQUEST, e))
-        }
+) -> Jsend<AddLinkSuccessResponse, AddLinkFailResponse> {
+    if let Some(fail) = req.validate(&state).await {
+        return Jsend::Fail(fail);
     }
 
     let mut links = state.links.write().await;
     
     let (key, entry) = match req.key {
-        Some(key) => (key.clone(), links.add_named(key, req.link).map_err(|e| (StatusCode::BAD_REQUEST, e))?),
+        Some(key) => (key.clone(), links.add_named(key, req.link)
+            .map_err(|_| "Duplicate key after validation (unreachable state)".to_string())?),  
         None => links.add(req.link)
     };
     
     links.save(&state.config.link_data_path)
-        .map_err(|e| server_error(e, "Could not create link: IO error"))?;
+        .map_err(|_| "Could not create link: IO error".to_string())?;
 
-    Ok(Json(AddLinkResponse {
-        key,
-        entry
-    }))
+    Jsend::Success(AddLinkSuccessResponse { key, entry })
 }
 
 type GetLinkResponse = Entry;
 async fn get_link(
     State(state): State<AppState>,
     key: axum::extract::Path<String>
-) -> Result<Json<GetLinkResponse>, HttpError> {
+) -> Jsend<GetLinkResponse, String> {
     let links = state.links.read().await;
-    let link = links.get(&key)
-        .ok_or((StatusCode::NOT_FOUND, "Link not found".to_string()))?;
-    Ok(Json(link.clone()))
+    links.get(&key).cloned()
+        .ok_or("Link not found".to_string())
+        .into()    
 }
 
 async fn delete_link(
     State(state): State<AppState>,
     key: axum::extract::Path<String>
-) -> Result<(), HttpError> {
+) -> Jsend<(), String> {
     let mut links = state.links.write().await;
     links.remove(key.as_str())
-        .ok_or((StatusCode::NOT_FOUND, "Link not found".to_string()))?;
-    Ok(())
+        .map(|_| ())    
+        .ok_or("Link not found".to_string())
+        .into()
 }
 
 type GetLinksResponse = Vec<(String, Entry)>;
 async fn get_links(
     State(state): State<AppState>
-) -> Json<GetLinksResponse> {
+) -> Jsend<GetLinksResponse, ()> {
     let links = state.links.read().await;
     let res = links.iter()
-    .map(|(k,v)| (k.clone(), v.clone()))
-    .collect::<Vec<_>>();
-    Json(res)
+        .map(|(k,v)| (k.clone(), v.clone()))
+        .collect::<Vec<_>>();
+    Jsend::Success(res)
 }
 
-#[derive(Serialize)]
-struct ValidationResult {
-    valid: bool,
-    reason: Option<String>
-}
-
-impl From<Result<(), String>> for ValidationResult {
-    fn from(value: Result<(), String>) -> Self {
-        ValidationResult {
-            valid: value.is_ok(),
-            reason: value.err()
-        }
-    }
-}
-
-type ValidateAddFormRequest = AddLinkRequest;
-
-#[derive(Serialize)]
-struct ValidateAddFormResponse {
-    link: ValidationResult,
-    key: Option<ValidationResult>
-}
-
-async fn validate_add_form(
+async fn validate_add_link(
     State(state): State<AppState>,
-    Json(req): Json<ValidateAddFormRequest>,
-) -> Json<ValidateAddFormResponse> {
-    Json(ValidateAddFormResponse {
-        link: validate_link(&state, &req.link).into(),
-        key: match &req.key {
-            Some(key) => Some(validate_key(&state, key).await.into()),
-            None => None
-        }
-    })
-}
-
-fn validate_link(_state: &AppState, link: &str) -> Result<(), String> {
-    if link.is_empty() {
-        return Err("Link cannot be empty".to_string());
+    Json(req): Json<AddLinkRequest>,
+) -> Jsend<(), AddLinkFailResponse> {
+    match req.validate(&state).await {
+        Some(fail) => Jsend::Fail(fail),
+        None => Jsend::Success(())
     }
-    if link.parse::<Uri>().is_err() {
-        return Err("Invalid URL".to_string());
-    }
-    Ok(())
-}
-
-async fn validate_key(state: &AppState, key: &str) -> Result<(), String> {
-    if key.len() < 4 {
-        return Err("Key cannot be less than 4 characters".to_string());
-    }
-    
-    if key.contains(|c: char| !c.is_alphanumeric() && c != '_' && c != '-') {
-        return Err("Key can only contain 0-9, A-Z, a-z, _ or -".to_string());
-    }
-
-    if state.config.key_blacklist.iter().any(|k| k == key) {
-        return Err(format!("Key '{key}' is disallowed"));
-    }
-
-    if state.links.read().await.get(key).is_some() {
-        return Err("Key already in use".to_string());
-    }
-
-    Ok(())
-}
-
-fn server_error<E: Display>(e: E, msg: impl AsRef<str>) -> HttpError {
-    let msg = msg.as_ref();
-    tracing::error!("{e}");
-    (
-        StatusCode::INTERNAL_SERVER_ERROR, 
-        format!("{msg}\nSee logs for more info.")
-    )
 }
 
 #[cfg(test)]
@@ -246,12 +314,19 @@ mod tests {
             let client = reqwest::Client::new();
 
             let res = client.post(format!("{addr}/links"))
-                .json(&AddLinkRequest { key: None, link: "https://example.com".to_string() })
+                .json(&AddLinkRequest { 
+                    key: None, link: 
+                    "https://example.com".to_string() 
+                })
                 .send().await.unwrap();
 
             assert_eq!(res.status(), 200);
-            let body = res.json::<AddLinkResponse>().await.unwrap();
-            assert_eq!(body.entry.link, "https://example.com");
+
+            let body: Jsend<AddLinkSuccessResponse, AddLinkFailResponse> = res.json().await.unwrap();
+            assert!(body.is_success());
+
+            let data = body.success().unwrap();
+            assert_eq!(data.entry.link, "https://example.com");
 
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
@@ -265,12 +340,19 @@ mod tests {
             let client = reqwest::Client::new();
 
             let res = client.post(format!("{addr}/links"))
-                .json(&AddLinkRequest { key: Some("test".to_string()), link: "https://example.com".to_string() })
+                .json(&AddLinkRequest { 
+                    key: Some("test".to_string()), 
+                    link: "https://example.com".to_string() 
+                })
                 .send().await.unwrap();
 
             assert_eq!(res.status(), 200);
-            let body = res.json::<AddLinkResponse>().await.unwrap();
-            assert_eq!(body.entry.link, "https://example.com");
+
+            let body: Jsend<AddLinkSuccessResponse, AddLinkFailResponse> = res.json().await.unwrap();
+            assert!(body.is_success());
+
+            let data = body.success().unwrap();
+            assert_eq!(data.entry.link, "https://example.com");
 
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
@@ -284,17 +366,24 @@ mod tests {
 
             let client = reqwest::Client::new();
 
+            client.post(format!("{addr}/links"))
+                .json(&AddLinkRequest { 
+                    key: Some("test".to_string()), 
+                    link: "https://example1.com".to_string() 
+                })
+                .send().await.unwrap();            
+
             let res = client.post(format!("{addr}/links"))
-                .json(&AddLinkRequest { key: Some("test".to_string()), link: "https://example.com".to_string() })
-                .send().await.unwrap();
+                .json(&AddLinkRequest { 
+                    key: Some("test".to_string()), 
+                    link: "https://example2.com".to_string() 
+                })
+                .send().await.unwrap();   
 
             assert_eq!(res.status(), 200);
 
-            let res = client.post(format!("{addr}/links"))
-                .json(&AddLinkRequest { key: Some("test".to_string()), link: "https://example.com".to_string() })
-                .send().await.unwrap();
-
-            assert_eq!(res.status(), 400);
+            let body: Jsend<AddLinkSuccessResponse, AddLinkFailResponse> = res.json().await.unwrap();
+            assert!(body.is_fail());
 
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
@@ -308,16 +397,31 @@ mod tests {
             let client = reqwest::Client::new();
 
             let res = client.post(format!("{addr}/links"))
-                .json(&AddLinkRequest { key: None, link: "https://example.com".to_string() })
+                .json(&AddLinkRequest { 
+                    key: None, 
+                    link: "https://example.com".to_string() 
+                })
                 .send().await.unwrap();
 
-            assert_eq!(res.status(), 200);        
-            
-            let res = client.post(format!("{addr}/links"))
-            .json(&AddLinkRequest { key: None, link: "https://example.com".to_string() })
-            .send().await.unwrap();
+            let key1 = res
+                .json::<Jsend<AddLinkSuccessResponse, AddLinkFailResponse>>().await.unwrap()
+                .success().unwrap()
+                .key;
 
-            assert_eq!(res.status(), 400);
+            let res = client.post(format!("{addr}/links"))
+                .json(&AddLinkRequest { 
+                    key: None, 
+                    link: "https://example.com".to_string() 
+                })
+                .send().await.unwrap();
+
+            assert_eq!(res.status(), 200);
+
+            let body: Jsend<AddLinkSuccessResponse, AddLinkFailResponse> = res.json().await.unwrap();
+            assert!(body.is_success());
+
+            let data = body.success().unwrap();
+            assert_eq!(data.key, key1);
 
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
@@ -332,20 +436,24 @@ mod tests {
             let (addr, shutdown) = setup_test_api(&links_path).await;
     
             let client = reqwest::Client::new();
-    
-            let res = client.post(format!("{addr}/links"))
-                .json(&AddLinkRequest { key: Some("test".to_string()), link: "https://example.com".to_string() })
+
+            client.post(format!("{addr}/links"))
+                .json(&AddLinkRequest { 
+                    key: Some("test".to_string()), 
+                    link: "https://example.com".to_string() 
+                })
                 .send().await.unwrap();
-    
-            assert_eq!(res.status(), 200);
-    
+
             let res = client.get(format!("{addr}/links/test"))
                 .send().await.unwrap();
-    
             assert_eq!(res.status(), 200);
-            let body = res.json::<Entry>().await.unwrap();
-            assert_eq!(body.link, "https://example.com");
-    
+
+            let body = res.json::<Jsend<GetLinkResponse, String>>().await.unwrap();
+            assert!(body.is_success());
+            
+            let data = body.success().unwrap();
+            assert_eq!(data.link, "https://example.com");
+
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
         }
@@ -359,9 +467,11 @@ mod tests {
     
             let res = client.get(format!("{addr}/links/test"))
                 .send().await.unwrap();
-    
-            assert_eq!(res.status(), 404);
-    
+            assert_eq!(res.status(), 200);
+
+            let body = res.json::<Jsend<GetLinkResponse, String>>().await.unwrap();
+            assert!(body.is_fail()); 
+
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
         }
@@ -376,21 +486,27 @@ mod tests {
     
             let client = reqwest::Client::new();
     
-            let res = client.post(format!("{addr}/links"))
-                .json(&AddLinkRequest { key: Some("test".to_string()), link: "https://example.com".to_string() })
+            client.post(format!("{addr}/links"))
+                .json(&AddLinkRequest { 
+                    key: Some("test".to_string()), 
+                    link: "https://example.com".to_string() 
+                })
                 .send().await.unwrap();
-    
-            assert_eq!(res.status(), 200);
     
             let res = client.delete(format!("{addr}/links/test"))
                 .send().await.unwrap();
     
             assert_eq!(res.status(), 200);
+
+            let body = res.json::<Jsend<(), String>>().await.unwrap();
+            assert!(body.is_success());
     
             let res = client.get(format!("{addr}/links/test"))
                 .send().await.unwrap();
-    
-            assert_eq!(res.status(), 404);
+            assert_eq!(res.status(), 200);
+
+            let body = res.json::<Jsend<GetLinkResponse, String>>().await.unwrap();
+            assert!(body.is_fail());        
     
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
@@ -405,8 +521,10 @@ mod tests {
     
             let res = client.delete(format!("{addr}/links/test"))
                 .send().await.unwrap();
-    
-            assert_eq!(res.status(), 404);
+            assert_eq!(res.status(), 200);
+            
+            let body = res.json::<Jsend<(), String>>().await.unwrap();
+            assert!(body.is_fail());
     
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
@@ -423,19 +541,23 @@ mod tests {
             let client = reqwest::Client::new();
     
             let res = client.post(format!("{addr}/links"))
-                .json(&AddLinkRequest { key: Some("test".to_string()), link: "https://example.com".to_string() })
+                .json(&AddLinkRequest { 
+                    key: Some("test".to_string()), 
+                    link: "https://example.com".to_string() 
+                })
                 .send().await.unwrap();
-    
-            assert_eq!(res.status(), 200);
     
             let res = client.get(format!("{addr}/links"))
                 .send().await.unwrap();
-    
             assert_eq!(res.status(), 200);
-            let body = res.json::<Vec<(String, Entry)>>().await.unwrap();
-            assert_eq!(body.len(), 1);
-            assert_eq!(body[0].0, "test");
-            assert_eq!(body[0].1.link, "https://example.com");
+                        
+            let body = res.json::<Jsend<GetLinksResponse, ()>>().await.unwrap();
+            assert!(body.is_success());
+
+            let data = body.success().unwrap();
+            assert_eq!(data.len(), 1);
+            assert_eq!(data[0].0, "test");
+            assert_eq!(data[0].1.link, "https://example.com");
     
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
@@ -450,10 +572,13 @@ mod tests {
     
             let res = client.get(format!("{addr}/links"))
                 .send().await.unwrap();
-    
             assert_eq!(res.status(), 200);
-            let body = res.json::<Vec<(String, Entry)>>().await.unwrap();
-            assert_eq!(body.len(), 0);
+
+            let body = res.json::<Jsend<GetLinksResponse, ()>>().await.unwrap();
+            assert!(body.is_success());
+
+            let data = body.success().unwrap();
+            assert_eq!(data.len(), 0);
     
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);

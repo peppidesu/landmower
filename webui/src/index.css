@@ -72,3 +72,7 @@ button.pill {
     content: '\ea5e';
   }
 }
+
+.spinner {
+  @apply fill-gray-900;
+}

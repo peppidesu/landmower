@@ -1,6 +1,3 @@
-import { useState } from 'preact/hooks'
-import preactLogo from './assets/preact.svg'
-import viteLogo from '/vite.svg'
 import { Navbar } from './components/Navbar'
 import { AddLinkForm } from './components/AddLinkForm'
 import Footer from './components/Footer'

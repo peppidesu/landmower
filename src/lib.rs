@@ -1,3 +1,4 @@
+#![feature(try_trait_v2)]
 use std::{path::PathBuf, sync::Arc};
 
 pub mod api;

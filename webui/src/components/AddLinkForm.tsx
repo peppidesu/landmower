@@ -2,31 +2,33 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import axios from "axios";
 import CopyButton from "./CopyButton";
 import { useDebouncedCallback } from "use-debounce";
-import spinner from "../assets/spinner.svg";
+import Spinner from "../assets/spinner.svg?react";
 
-async function shorten(link: string, custom: boolean, customName: string): Promise<ShortenResult> {    
+type Jsend<T, F> = { status: "success", data: T }
+                 | { status: "fail", data: F }
+                 | { status: "error", data: string };
+
+type Entry = { 
+    link: string, 
+    key: string, 
+    metadata: { 
+        used: number, 
+        last_used: string, created: string 
+    } 
+}
+
+type AddLinkResponse = Jsend<AddLinkSuccessData, AddLinkFailData>;
+type ValidateResponse = Jsend<null, AddLinkFailData>;
+type AddLinkSuccessData = { key: string, entry: Entry };
+type AddLinkFailData = { link?: string, key?: string };
+
+async function addLink(link: string, custom: boolean, customName: string): Promise<AddLinkResponse> {    
     let res = await axios.post(`${import.meta.env.VITE_SERVER_URL}api/links`, {
         link: link,
         key: custom ? customName : undefined
-    }).catch(e => e.response);
-    return res.status === 200 ? {
-        success: true,
-        data: res.data
-    } : {
-        success: false,
-        error: res.data
-    }
+    });
+    return res.data;
 }
-type ShortenResult = { success: true, data: any } | { success: false, error: any };
-
-// Form validation ------------------------------
-
-type ValidationResult = { valid: true } | { valid: false, reason: string };
-type ValidateFormResponse = {
-    link: ValidationResult,
-    key?: ValidationResult
-}
-
 
 
 export function AddLinkForm() {        
@@ -39,32 +41,25 @@ export function AddLinkForm() {
     const [linkTouched, setLinkTouched] = useState(false);
     const [keyTouched, setKeyTouched] = useState(false);
 
-    const [shortened, setShortened] = useState<ShortenResult | null>(null);    
-    const [validateFormResponse, setValidateFormResponse] 
-        = useState<ValidateFormResponse | null>(null);
+    const [addLinkRes, setShortenRes] = useState<AddLinkResponse | null>(null);    
+    const [validateRes, setValidateRes] = useState<ValidateResponse | null>(null);
 
     const [isValidating, setIsValidating] = useState(false);
-    const validate = useDebouncedCallback(async (link, customize, key) => {        
-
-        let res = await axios.post(`${import.meta.env.VITE_SERVER_URL}api/validate/add_form`, {
+    const validate = useDebouncedCallback(async (link, customize, key) => {
+        let res = await axios.post(`${import.meta.env.VITE_SERVER_URL}api/validate/add_link`, {
             link: link,
             key: customize ? key : undefined
-        }).catch(e => e.response);
-
-        if (res.status === 200) {
-            setValidateFormResponse(res.data);
-        }
-        else {
-            console.log("Error", res.data);
-        }
-
+        });
+        setValidateRes(res.data);
         setIsValidating(false);
     }, 500);
-
+    
     useEffect(() => {
         setIsValidating(true);
         validate(link, customize, key);
     }, [link, key, customize]);
+
+    const invalid = validateRes?.status === "fail" ? validateRes.data : null;
 
     return (    
         <div class="max-w-2xl flex flex-col items-center px-8 gap-5 w-full">
@@ -72,14 +67,14 @@ export function AddLinkForm() {
             <form ref={form} method="post" 
                 onSubmit={async e => {
                     e.preventDefault();                             
-                    let result = await shorten(link, customize, key);
-                    if (result.success) {
+                    let result = await addLink(link, customize, key);
+                    if (result.status === "success") {
                         form.current?.reset();
                     }
-                    setShortened(result);
+                    setShortenRes(result);
                 }}
             >                        
-                <input class={`w-full ${linkTouched && !validateFormResponse?.link.valid ? "invalid" : ""}`}
+                <input class={`w-full ${linkTouched && invalid?.link ? "invalid" : ""}`}
                     name="link" 
                     type="text"                  
                     onInput={e => setLink((e.target as HTMLInputElement).value)}
@@ -95,7 +90,7 @@ export function AddLinkForm() {
                         Customize
                     </label>
                     
-                    <input class={`w-full ${keyTouched && !validateFormResponse?.key?.valid ? "invalid" : ""}`}
+                    <input class={`w-full ${keyTouched && invalid?.key ? "invalid" : ""}`}
                         name="key" 
                         type="text" 
                         placeholder="Enter custom key"                     
@@ -104,19 +99,24 @@ export function AddLinkForm() {
                         disabled={!customize}
                     />
                     <button 
-                        class="pill h-10 w-40"
+                        class="pill h-10 w-40 "
                         type="submit"
-                        disabled={isValidating || !validateFormResponse?.link.valid || (customize && !validateFormResponse?.key?.valid)}
+                        disabled={isValidating || !!invalid}
                     >
-                        {isValidating ? <img class="m-auto" src={spinner}></img> : "Shorten"}
+                        {isValidating ? <Spinner class="m-auto" /> : "Shorten"}
                     </button>  
-                </div>                       
+                </div>
+                <ul class="text-red-400 text-sm h-[2rlh] w-full text-right pt-2 pr-1">
+                    {linkTouched && invalid?.link && <li>{invalid?.link}</li>}
+                    {keyTouched  && invalid?.key && <li>{invalid?.key}</li>}
+                </ul>
+                
+                                          
             </form>   
 
-            {shortened && shortened.success
-                ? <CopyButton text={`${import.meta.env.VITE_SERVER_URL}${shortened.data.key}`} />
-            : null
-            }  
+            {addLinkRes && addLinkRes.status === "success" &&
+                <CopyButton text={`${import.meta.env.VITE_SERVER_URL}${addLinkRes.data.key}`} />                
+            }
         </div>
     )
 }
