@@ -22,7 +22,7 @@ export type DeleteLinkResponse = Jsend<null, string>;
 export type ValidateAddLinkResponse = Jsend<null, AddLinkFailData>;
 
 export async function add_link(link: string, custom: boolean, customName: string): Promise<AddLinkResponse> {    
-    let res = await axios.post(`${import.meta.env.VITE_SERVER_URL}api/links`, {
+    let res = await axios.post(`/api/links`, {
         link: link,
         key: custom ? customName : undefined
     });
@@ -30,22 +30,22 @@ export async function add_link(link: string, custom: boolean, customName: string
 }
 
 export async function get_links(): Promise<GetLinksResponse> {
-    let res = await axios.get(`${import.meta.env.VITE_SERVER_URL}api/links`);
+    let res = await axios.get(`/api/links`);
     return res.data;
 }
 
 export async function get_link(key: string): Promise<GetLinkResponse> {
-    let res = await axios.get(`${import.meta.env.VITE_SERVER_URL}api/links/${key}`);
+    let res = await axios.get(`/api/links/${key}`);
     return res.data;
 }
 
 export async function delete_link(key: string): Promise<DeleteLinkResponse> {
-    let res = await axios.delete(`${import.meta.env.VITE_SERVER_URL}api/links/${key}`);
+    let res = await axios.delete(`/api/links/${key}`);
     return res.data;
 }
 
 export async function validate_add_link(link: string, custom: boolean, customName: string): Promise<ValidateAddLinkResponse> {
-    let res = await axios.post(`${import.meta.env.VITE_SERVER_URL}api/validate/add_link`, {
+    let res = await axios.post(`/api/validate/add_link`, {
         link: link,
         key: custom ? customName : undefined
     });
