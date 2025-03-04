@@ -1,23 +1,21 @@
-import { defineConfig } from 'vite'
-import preact from '@preact/preset-vite'
-import tailwindcss from '@tailwindcss/vite'
-import svgr from 'vite-plugin-svgr'
+import { defineConfig } from "vite";
+import preact from "@preact/preset-vite";
+import tailwindcss from "@tailwindcss/vite";
+import svgr from "vite-plugin-svgr";
 
 // https://vite.dev/config/
 export default defineConfig(() => {
-  return {    
+  return {
     plugins: [
-      preact(), 
-      tailwindcss(), 
+      preact(),
+      tailwindcss(),
       svgr({
-        svgrOptions: {
-
-        }        
-      })
+        svgrOptions: {},
+      }),
     ],
     build: {
-      outDir: '../static',
-      emptyOutDir: true
+      outDir: "../static",
+      emptyOutDir: true,
     },
-  }
-})
+  };
+});

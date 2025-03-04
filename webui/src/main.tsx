@@ -1,6 +1,8 @@
-import { render } from 'preact'
-import './index.css'
-import { App } from './app.tsx'
-import Spinner from "../assets/spinner.svg";
+import { render } from "preact";
+import "./index.css";
+import { Provider } from "react-redux";
+import { store } from "./store.ts";
 
-render(<App />, document.getElementById('app')!)
+import { App } from "./app.tsx";
+
+render(<App />, document.getElementById("app")!);

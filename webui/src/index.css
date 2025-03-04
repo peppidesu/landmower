@@ -1,81 +1,80 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 :root {
-  font-family: 'Lexend Deca';
+  font-family: "Lexend Deca";
   color: white;
 }
 ::selection {
-  @apply  bg-gray-500 text-white;
+  @apply bg-gray-500 text-white;
 }
 
 .navbar-button {
-  @apply  p-2 rounded-full text-xl 
+  @apply p-2 rounded-full text-xl 
           hover:bg-white hover:text-gray-800 
           active:bg-gray-300 active:text-gray-800 active:duration-[0s]
           transition-all duration-150;
 }
 
 .delete-button {
-  @apply  rounded-full text-xl text-red-400
+  @apply rounded-full text-xl text-red-400
           hover:bg-red-400 hover:text-gray-900
           active:bg-red-400 active:text-gray-900 active:duration-[0s]
           transition-all duration-150;
 }
 
-input[type='text'] {
-  @apply  px-4 py-2 rounded-full bg-gray-800 border-gray-700 border-2 
+input[type="text"] {
+  @apply px-4 py-2 rounded-full bg-gray-800 border-gray-700 border-2 
           focus:border-gray-300 outline-0 
           disabled:border-gray-700 disabled:bg-gray-900 disabled:text-gray-500          
           transition-all duration-150;
 }
-input[type='text']:not(:disabled):not(:focus).invalid {
-  @apply  border-red-400;
+input[type="text"]:not(:disabled):not(:focus).invalid {
+  @apply border-red-400;
 }
 
-
-input[type="checkbox"] {  
+input[type="checkbox"] {
   -webkit-appearance: none;
-  appearance: none;  
-  background-color: #fff;  
+  appearance: none;
+  background-color: #fff;
   margin: 0;
-  
-  @apply  bg-gray-800 rounded-full w-5 h-5 border-gray-700 border-2
+
+  @apply bg-gray-800 rounded-full w-5 h-5 border-gray-700 border-2
           transition-all duration-300;
 }
 
-input[type="checkbox"]:checked {    
-  @apply  border-white inset-ring-4 inset-ring-gray-800 bg-white;
+input[type="checkbox"]:checked {
+  @apply border-white inset-ring-4 inset-ring-gray-800 bg-white;
 }
 
 button.pill {
-  @apply  rounded-full border-0 px-4 py-2
+  @apply rounded-full border-0 px-4 py-2
           disabled:bg-gray-500
           active:duration-[0s]
           transition-all duration-150;
 }
 
 .btn-primary {
-  @apply  bg-gray-200 text-gray-800
+  @apply bg-gray-200 text-gray-800
           hover:bg-white
           active:bg-blue-400/20 active:duration-[0s]
           transition-all duration-150;
 }
 .btn-danger {
-  @apply  bg-red-400/80 text-gray-800
+  @apply bg-red-400/80 text-gray-800
           hover:bg-red-400
           active:bg-red-400/20 active:duration-[0s]
           transition-all duration-150;
 }
 
-.copy-icon {  
-  font-family: "tabler-icons" !important;  
+.copy-icon {
+  font-family: "tabler-icons" !important;
 }
 .copy-icon::before {
-  content: '\ea7a';  
+  content: "\ea7a";
   display: inline-block;
 }
 .copy-icon.copy-icon-animate::before {
-  animation: copy-icon-click-animation 0.2s forwards ease-in-out;  
+  animation: copy-icon-click-animation 0.2s forwards ease-in-out;
   display: inline-block;
 }
 
@@ -89,7 +88,7 @@ button.pill {
 }
 
 .dialog-wrapper.hidden {
-  opacity: 0;  
+  opacity: 0;
   pointer-events: none;
 }
 .dialog-wrapper.hidden > * {
@@ -102,11 +101,11 @@ button.pill {
   }
   50% {
     transform: scale(0);
-    content: '\ea5e';        
+    content: "\ea5e";
   }
   100% {
     transform: scale(1);
-    content: '\ea5e';
+    content: "\ea5e";
   }
 }
 
