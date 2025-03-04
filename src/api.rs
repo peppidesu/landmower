@@ -440,7 +440,7 @@ mod tests {
 
             shutdown.send(()).await.unwrap();
             cleanup(&links_path);
-        }
+        }        
     }
 
     mod get_link {

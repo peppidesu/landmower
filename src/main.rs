@@ -1,10 +1,17 @@
 use std::{
-    borrow::Cow, sync::Arc, time::Duration
+    sync::Arc, 
+    time::Duration
 };
 
 use axum::{
-    body::Body, extract::{Path, State}, http::{StatusCode, Uri}, response::{Html, Redirect}, routing, Router
+    body::Body, 
+    extract::{Path, State}, 
+    http::StatusCode, 
+    response::Redirect, 
+    routing, 
+    Router
 };
+
 use axum_embed::ServeEmbed;
 use minijinja::Environment;
 use rust_embed::Embed;
@@ -13,7 +20,7 @@ use concurrent_queue::ConcurrentQueue;
 use tower_http::trace::TraceLayer;
 use http_body_util::BodyExt;
 
-pub use landmower::*;
+use landmower::*;
 use links::Links;
 
 #[derive(Embed, Clone)]

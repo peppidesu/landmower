@@ -48,10 +48,10 @@ impl Config {
             .unwrap_or_else(|_| default_link_data_path());
 
         let bind_address = std::env::var("LANDMOWER_BIND_ADDRESS")
-            .unwrap_or_else(|_| "localhost:7171".to_string());
+            .unwrap_or_else(|_| "0.0.0.0:7171".to_string());
 
         let server_base_url = std::env::var("LANDMOWER_BASE_URL")
-            .unwrap_or_else(|_| "http://localhost:7171/".to_string());
+            .unwrap_or_else(|_| "landmow.er/".to_string());
 
         let key_blacklist: Vec<_> = std::env::var("LANDMOWER_KEY_BLACKLIST")
             .unwrap_or_else(|_| "".to_string())
